@@ -7,6 +7,7 @@ import type {
   PublicPayment,
   PublicPaymentSimulationResult,
   PublicPaymentSimulationPayload,
+  PublicReviewPayload,
   PublicReservation,
   PublicReservationPayload,
   PublicRoom,
@@ -45,12 +46,12 @@ async function executePublic<T>(operation: (baseUrl: string) => Promise<T>) {
   throw lastError;
 }
 
-async function executePublicEndpoint<T>(paths: string[], options: { params?: Record<string, unknown> } = {}) {
+async function executePublicEndpoint<T>(paths: string[], options: { params?: Record<string, unknown>; headers?: Record<string, string> } = {}) {
   let lastError: unknown;
 
   for (const path of paths) {
     try {
-      return await executePublic((baseURL) => axios.get<T>(path, { baseURL, params: options.params }));
+      return await executePublic((baseURL) => axios.get<T>(path, { baseURL, params: options.params, headers: options.headers }));
     } catch (error) {
       lastError = error;
       if (!axios.isAxiosError(error) || !error.response || ![404, 405].includes(error.response.status)) {
@@ -262,6 +263,23 @@ export async function createPublicReservation(payload: PublicReservationPayload)
 export async function getPublicReservation(reservaGuid: string) {
   const response = await executePublicEndpoint<{ data: PublicReservation }>([`/api/v1/public/reservas/${reservaGuid}`]);
   return normalizeObject(response.data.data) as PublicReservation;
+}
+
+export async function getPublicCustomerReservations() {
+  const response = await executePublicEndpoint<{ data: PublicReservation[] }>(
+    ['/api/v1/public/reservas/mis-reservas', '/api/v1/public/reservas'],
+    { headers: customerAuthHeaders() },
+  );
+  return normalizeObject(response.data.data) as PublicReservation[];
+}
+
+export async function submitPublicReview(payload: PublicReviewPayload) {
+  const response = await postPublicEndpoint<{ data: unknown }>(
+    ['/api/v1/public/valoraciones', '/api/v1/public/resenas', '/api/v1/public/reseñas'],
+    payload,
+    { headers: customerAuthHeaders() },
+  );
+  return normalizeObject(response.data.data);
 }
 
 export async function simulatePublicPayment(payload: PublicPaymentSimulationPayload) {

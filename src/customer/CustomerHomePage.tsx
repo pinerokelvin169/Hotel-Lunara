@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BedDouble,
   CalendarDays,
+  ClipboardCheck,
   Clock,
   CreditCard,
   Hotel,
@@ -12,6 +13,7 @@ import {
   Mail,
   Menu,
   MapPin,
+  MessageSquareText,
   Minus,
   Phone,
   Plus,
@@ -35,13 +37,15 @@ import {
   clearStoredPublicCustomerAuth,
   createPublicReservation,
   getPublicBranches,
+  getPublicCustomerReservations,
   getPublicServices,
   getStoredPublicCustomerAuth,
   loginPublicCustomer,
   registerPublicCustomer,
   searchPublicRooms,
+  submitPublicReview,
 } from './publicApi';
-import type { PublicBranch, PublicCustomerAuth, PublicReservationPayload, PublicRoom, PublicService } from './types';
+import type { PublicBranch, PublicCustomerAuth, PublicReservation, PublicReservationPayload, PublicReviewPayload, PublicRoom, PublicService } from './types';
 
 function today(offset = 0) {
   const date = new Date();
@@ -174,6 +178,168 @@ function ServiceCard({ service }: { service: PublicService }) {
         <small>{[schedule, service.PrecioBase > 0 ? money(service.PrecioBase) : ''].filter(Boolean).join(' - ')}</small>
       </div>
     </article>
+  );
+}
+
+function reservationStateLabel(state: string) {
+  const normalized = state.toUpperCase();
+  if (normalized === 'CON') return 'Confirmada';
+  if (normalized === 'PEN') return 'Pendiente';
+  if (normalized === 'CAN') return 'Cancelada';
+  if (normalized === 'FIN') return 'Finalizada';
+  return state || 'Sin estado';
+}
+
+function formatShortDate(value: string) {
+  if (!value) {
+    return '-';
+  }
+
+  return new Intl.DateTimeFormat('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
+}
+
+function CustomerReservationCard({ reservation, onReview }: { reservation: PublicReservation; onReview: (reservation: PublicReservation) => void }) {
+  const isConfirmed = reservation.EstadoReserva?.toUpperCase() === 'CON';
+  const roomCount = reservation.Habitaciones?.length ?? 0;
+  const canReview = ['CON', 'FIN'].includes(reservation.EstadoReserva?.toUpperCase());
+
+  return (
+    <article className="customer-reservation-card">
+      <div>
+        <span className={`reservation-status ${isConfirmed ? 'confirmed' : ''}`}>{reservationStateLabel(reservation.EstadoReserva)}</span>
+        <h3>{reservation.CodigoReserva || `Reserva ${reservation.ReservaGuid.slice(0, 8)}`}</h3>
+        <p>{formatShortDate(reservation.FechaInicio)} al {formatShortDate(reservation.FechaFin)}</p>
+      </div>
+      <div className="reservation-card-meta">
+        <span><BedDouble size={16} /> {roomCount} habitacion(es)</span>
+        <span><CreditCard size={16} /> {money(reservation.TotalReserva, reservation.Factura?.Moneda ?? 'USD')}</span>
+        {reservation.Factura ? <span>Factura {reservation.Factura.NumeroFactura}</span> : null}
+      </div>
+      {canReview ? (
+        <button type="button" className="customer-secondary-button icon-text" onClick={() => onReview(reservation)}>
+          <MessageSquareText size={17} />
+          <span>Valorar estadia</span>
+        </button>
+      ) : null}
+    </article>
+  );
+}
+
+function ReviewForm({
+  reservation,
+  onReviewed,
+}: {
+  reservation: PublicReservation;
+  onReviewed: () => void;
+}) {
+  const [form, setForm] = useState({
+    PuntuacionGeneral: 10,
+    PuntuacionLimpieza: 10,
+    PuntuacionConfort: 10,
+    PuntuacionUbicacion: 10,
+    PuntuacionInstalaciones: 10,
+    PuntuacionPersonal: 10,
+    PuntuacionCalidadPrecio: 10,
+    TipoViaje: 'PAREJA',
+    ComentarioPositivo: '',
+    ComentarioNegativo: '',
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      setError(null);
+      setSuccess(false);
+
+      if (form.PuntuacionGeneral < 1 || form.PuntuacionGeneral > 10) {
+        throw new ClientValidationError(['La puntuacion general debe estar entre 1 y 10.']);
+      }
+
+      const payload: PublicReviewPayload = {
+        ReservaGuid: reservation.ReservaGuid,
+        ...form,
+      };
+      return submitPublicReview(payload);
+    },
+    onError: (requestError) => {
+      if (requestError instanceof ClientValidationError) {
+        setError(requestError.message);
+        return;
+      }
+
+      const backend = readBackendError(requestError);
+      setError(backend.message ?? (requestError instanceof Error ? requestError.message : 'No pudimos registrar la valoracion.'));
+    },
+    onSuccess: () => {
+      setSuccess(true);
+      onReviewed();
+    },
+  });
+
+  const updateScore = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: Number(value) }));
+    setError(null);
+  };
+
+  return (
+    <form className="customer-booking-form customer-review-form" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
+      <div className="booking-summary compact">
+        <div>
+          <h3>{reservation.CodigoReserva}</h3>
+          <p>{formatShortDate(reservation.FechaInicio)} al {formatShortDate(reservation.FechaFin)}</p>
+        </div>
+      </div>
+
+      <div className="customer-form-grid">
+        {[
+          ['PuntuacionGeneral', 'General'],
+          ['PuntuacionLimpieza', 'Limpieza'],
+          ['PuntuacionConfort', 'Confort'],
+          ['PuntuacionUbicacion', 'Ubicacion'],
+          ['PuntuacionInstalaciones', 'Instalaciones'],
+          ['PuntuacionPersonal', 'Personal'],
+          ['PuntuacionCalidadPrecio', 'Calidad precio'],
+        ].map(([field, label]) => (
+          <label key={field}>
+            <span>{label}</span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              step={0.1}
+              value={String(form[field as keyof typeof form])}
+              onChange={(event) => updateScore(field as keyof typeof form, event.target.value)}
+            />
+          </label>
+        ))}
+        <label>
+          <span>Tipo de viaje</span>
+          <select value={form.TipoViaje} onChange={(event) => setForm((current) => ({ ...current, TipoViaje: event.target.value }))}>
+            <option value="NEGOCIOS">Negocios</option>
+            <option value="FAMILIAR">Familiar</option>
+            <option value="PAREJA">Pareja</option>
+            <option value="SOLO">Solo</option>
+            <option value="AMIGOS">Amigos</option>
+          </select>
+        </label>
+        <label className="span-2">
+          <span>Que fue lo mejor?</span>
+          <textarea maxLength={2000} value={form.ComentarioPositivo} onChange={(event) => setForm((current) => ({ ...current, ComentarioPositivo: event.target.value }))} />
+        </label>
+        <label className="span-2">
+          <span>Que podriamos mejorar?</span>
+          <textarea maxLength={2000} value={form.ComentarioNegativo} onChange={(event) => setForm((current) => ({ ...current, ComentarioNegativo: event.target.value }))} />
+        </label>
+      </div>
+
+      {error ? <StatusMessage kind="error" title={error} /> : null}
+      {success ? <StatusMessage kind="success" title="Gracias, recibimos tu valoracion." /> : null}
+      <button type="submit" className="customer-primary-button icon-text" disabled={mutation.isPending}>
+        <Star size={18} />
+        <span>{mutation.isPending ? 'Enviando...' : 'Enviar valoracion'}</span>
+      </button>
+    </form>
   );
 }
 
@@ -538,6 +704,7 @@ function BookingForm({
 }
 
 export function CustomerHomePage() {
+  const queryClient = useQueryClient();
   const branchesQuery = useQuery({ queryKey: ['public-branches'], queryFn: getPublicBranches });
   const branches = branchesQuery.data ?? [];
   const [selectedBranchGuid, setSelectedBranchGuid] = useState('');
@@ -550,6 +717,7 @@ export function CustomerHomePage() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [customerNavOpen, setCustomerNavOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [selectedReviewReservation, setSelectedReviewReservation] = useState<PublicReservation | null>(null);
 
   const selectedBranch = useMemo(
     () => branches.find((branch) => branch.SucursalGuid === selectedBranchGuid) ?? null,
@@ -579,9 +747,17 @@ export function CustomerHomePage() {
     enabled: hasSearched,
   });
 
+  const customerReservationsQuery = useQuery({
+    queryKey: ['public-customer-reservations', customerAuth?.usuarioGuid],
+    queryFn: getPublicCustomerReservations,
+    enabled: Boolean(customerAuth),
+  });
+
   const showcaseRooms = showcaseRoomsQuery.data ?? [];
   const rooms = hasSearched ? availabilityRoomsQuery.data ?? [] : showcaseRooms;
   const services = servicesQuery.data ?? [];
+  const customerReservations = customerReservationsQuery.data ?? [];
+  const confirmedReservations = customerReservations.filter((reservation) => reservation.EstadoReserva?.toUpperCase() === 'CON');
   const activeRoomsQuery = hasSearched ? availabilityRoomsQuery : showcaseRoomsQuery;
   const featuredRoom = showcaseRooms.find((room) => room.Imagenes?.[0]) ?? showcaseRooms[0] ?? null;
   const displayedBranch = selectedBranch ?? branches.find((branch) => branch.SucursalGuid === featuredRoom?.SucursalGuid) ?? branches[0] ?? null;
@@ -662,6 +838,7 @@ export function CustomerHomePage() {
           <a href="#sucursales" onClick={() => setCustomerNavOpen(false)}>Sucursales</a>
           <a href="#habitaciones" onClick={() => setCustomerNavOpen(false)}>Habitaciones</a>
           <a href="#servicios" onClick={() => setCustomerNavOpen(false)}>Servicios</a>
+          {customerAuth ? <a href="#mis-reservas" onClick={() => setCustomerNavOpen(false)}>Mis reservas</a> : null}
           <a href="#contacto" onClick={() => setCustomerNavOpen(false)}>Contacto</a>
           {customerAuth ? (
             <>
@@ -806,6 +983,50 @@ export function CustomerHomePage() {
           </div>
         </section>
 
+        <section id="mis-reservas" className="customer-section customer-account-section">
+          <div className="customer-section-header">
+            <div>
+              <span className="eyebrow">Area de cliente</span>
+              <h2>Tus reservas confirmadas.</h2>
+            </div>
+            {customerAuth ? <p>{customerReservationsQuery.isFetching ? 'Actualizando reservas...' : `${confirmedReservations.length} confirmada(s)`}</p> : null}
+          </div>
+
+          {!customerAuth ? (
+            <div className="customer-account-guest">
+              <div>
+                <ClipboardCheck size={30} />
+                <strong>Ingresa para ver tus reservas</strong>
+                <p>Al iniciar sesion podras consultar tus reservas confirmadas y dejar una valoracion despues de tu estadia.</p>
+              </div>
+              <button type="button" className="customer-primary-button icon-text" onClick={() => openCustomerAuth('login')}>
+                <LogIn size={18} />
+                <span>Entrar a mi cuenta</span>
+              </button>
+            </div>
+          ) : null}
+
+          {customerAuth && customerReservationsQuery.isError ? (
+            <StatusMessage
+              kind="error"
+              title="No pudimos cargar tus reservas."
+              details={['Verifica que la API tenga disponible el endpoint publico de reservas del cliente.']}
+            />
+          ) : null}
+
+          {customerAuth && !customerReservationsQuery.isFetching && confirmedReservations.length === 0 && !customerReservationsQuery.isError ? (
+            <div className="empty-state">Aun no tienes reservas confirmadas en esta cuenta.</div>
+          ) : null}
+
+          {customerAuth && confirmedReservations.length > 0 ? (
+            <div className="customer-reservation-grid">
+              {confirmedReservations.map((reservation) => (
+                <CustomerReservationCard key={reservation.ReservaGuid} reservation={reservation} onReview={setSelectedReviewReservation} />
+              ))}
+            </div>
+          ) : null}
+        </section>
+
         <section className="experience-section">
           <div>
             <span className="eyebrow">Experiencia</span>
@@ -868,6 +1089,22 @@ export function CustomerHomePage() {
         onClose={() => { setAuthModalOpen(false); setPendingRoom(null); }}
       >
         <CustomerAuthForm mode={authMode} onModeChange={setAuthMode} onAuthenticated={handleAuthenticated} />
+      </Modal>
+
+      <Modal
+        open={Boolean(selectedReviewReservation)}
+        title="Valora tu estadia"
+        description={selectedReviewReservation ? `Reserva ${selectedReviewReservation.CodigoReserva}` : undefined}
+        onClose={() => setSelectedReviewReservation(null)}
+      >
+        {selectedReviewReservation ? (
+          <ReviewForm
+            reservation={selectedReviewReservation}
+            onReviewed={() => {
+              queryClient.invalidateQueries({ queryKey: ['public-customer-reservations'] });
+            }}
+          />
+        ) : null}
       </Modal>
     </div>
   );

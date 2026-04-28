@@ -162,6 +162,20 @@ export interface PublicReservation {
   }>;
 }
 
+export interface PublicReviewPayload {
+  ReservaGuid: string;
+  PuntuacionGeneral: number;
+  PuntuacionLimpieza?: number;
+  PuntuacionConfort?: number;
+  PuntuacionUbicacion?: number;
+  PuntuacionInstalaciones?: number;
+  PuntuacionPersonal?: number;
+  PuntuacionCalidadPrecio?: number;
+  TipoViaje?: string;
+  ComentarioPositivo?: string;
+  ComentarioNegativo?: string;
+}
+
 export interface PublicPaymentSimulationPayload {
   FacturaGuid: string;
   MetodoPago: 'TARJETA';
