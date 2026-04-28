@@ -131,7 +131,7 @@ function generateTariffCode(tarifas: GenericRecord[]) {
   return `${prefix}${String(next).padStart(3, '0')}`;
 }
 
-function recordText(record: GenericRecord, keys: string[], fallbackKey: string) {
+function recordText(record: GenericRecord, keys: readonly string[], fallbackKey: string) {
   const parts = keys.map((key) => record[key]).filter((value) => value !== null && value !== undefined && String(value).trim() !== '');
   return parts.length > 0 ? parts.map(String).join(' ') : `#${String(record[fallbackKey] ?? '')}`;
 }
@@ -277,6 +277,75 @@ const catalogServiceCategories = [
   { label: 'Eventos', value: 'EVENTOS' },
   { label: 'Otros', value: 'OTROS' },
 ];
+
+const relationLookups = {
+  IdCliente: {
+    path: '/api/v1/internal/clientes',
+    idField: 'IdCliente',
+    labelKeys: ['RazonSocial', 'Nombres', 'Apellidos', 'NumeroIdentificacion'],
+  },
+  IdSucursal: {
+    path: '/api/v1/internal/sucursales',
+    idField: 'IdSucursal',
+    labelKeys: ['NombreSucursal', 'Ciudad'],
+  },
+  IdTipoHabitacion: {
+    path: '/api/v1/internal/tipos-habitacion',
+    idField: 'IdTipoHabitacion',
+    labelKeys: ['NombreTipoHabitacion', 'TipoCama', 'CapacidadTotal'],
+  },
+  IdHabitacion: {
+    path: '/api/v1/internal/habitaciones',
+    idField: 'IdHabitacion',
+    labelKeys: ['NumeroHabitacion', 'DescripcionHabitacion', 'EstadoHabitacion'],
+  },
+  IdFactura: {
+    path: '/api/v1/internal/facturas',
+    idField: 'IdFactura',
+    labelKeys: ['NumeroFactura', 'Estado', 'Total'],
+  },
+  IdReserva: {
+    path: '/api/v1/internal/reservas',
+    idField: 'IdReserva',
+    labelKeys: ['CodigoReserva', 'EstadoReserva'],
+  },
+  IdCatalogo: {
+    path: '/api/v1/internal/catalogo-servicios',
+    idField: 'IdCatalogo',
+    labelKeys: ['NombreCatalogo', 'CodigoCatalogo', 'TipoCatalogo'],
+  },
+  IdUsuario: {
+    path: '/api/v1/internal/usuarios',
+    idField: 'IdUsuario',
+    labelKeys: ['Nombres', 'Apellidos', 'Username'],
+  },
+  IdRol: {
+    path: '/api/v1/internal/roles',
+    idField: 'IdRol',
+    labelKeys: ['NombreRol', 'DescripcionRol'],
+  },
+} as const;
+
+type RelationKey = keyof typeof relationLookups;
+
+function isRelationKey(value: string): value is RelationKey {
+  return value in relationLookups;
+}
+
+function buildLookup(records: GenericRecord[], idField: string, labelKeys: readonly string[]) {
+  const lookup = new Map<string, string>();
+
+  for (const record of records) {
+    const id = record[idField];
+    if (id === null || id === undefined || String(id).trim() === '') {
+      continue;
+    }
+
+    lookup.set(String(id), recordText(record, labelKeys, idField));
+  }
+
+  return lookup;
+}
 
 function FormFields({
   fields,
@@ -1954,6 +2023,98 @@ export function ResourcePage() {
     queryFn: () => fetchPaged<GenericRecord>(config!.path, page, pageSize),
   });
 
+  const relatedColumnKeys = useMemo(() => {
+    const keys = new Set<RelationKey>();
+
+    if (!config) {
+      return keys;
+    }
+
+    for (const column of config.columns) {
+      const key = String(column.key);
+      if (key !== String(config.idField) && isRelationKey(key)) {
+        keys.add(key);
+      }
+    }
+
+    return keys;
+  }, [config]);
+
+  const clientesLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'clientes'],
+    enabled: relatedColumnKeys.has('IdCliente'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdCliente.path, 1, 200),
+  });
+  const sucursalesLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'sucursales'],
+    enabled: relatedColumnKeys.has('IdSucursal'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdSucursal.path, 1, 200),
+  });
+  const tiposHabitacionLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'tipos-habitacion'],
+    enabled: relatedColumnKeys.has('IdTipoHabitacion'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdTipoHabitacion.path, 1, 200),
+  });
+  const habitacionesLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'habitaciones'],
+    enabled: relatedColumnKeys.has('IdHabitacion'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdHabitacion.path, 1, 200),
+  });
+  const facturasLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'facturas'],
+    enabled: relatedColumnKeys.has('IdFactura'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdFactura.path, 1, 200),
+  });
+  const reservasLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'reservas'],
+    enabled: relatedColumnKeys.has('IdReserva'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdReserva.path, 1, 200),
+  });
+  const catalogoLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'catalogo-servicios'],
+    enabled: relatedColumnKeys.has('IdCatalogo'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdCatalogo.path, 1, 200),
+  });
+  const usuariosLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'usuarios'],
+    enabled: relatedColumnKeys.has('IdUsuario'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdUsuario.path, 1, 200),
+  });
+  const rolesLookupQuery = useQuery({
+    queryKey: ['resource-lookup', 'roles'],
+    enabled: relatedColumnKeys.has('IdRol'),
+    queryFn: () => fetchPaged<GenericRecord>(relationLookups.IdRol.path, 1, 200),
+  });
+
+  const relationMaps = useMemo<Record<RelationKey, Map<string, string>>>(
+    () => ({
+      IdCliente: buildLookup(clientesLookupQuery.data?.data ?? [], relationLookups.IdCliente.idField, relationLookups.IdCliente.labelKeys),
+      IdSucursal: buildLookup(sucursalesLookupQuery.data?.data ?? [], relationLookups.IdSucursal.idField, relationLookups.IdSucursal.labelKeys),
+      IdTipoHabitacion: buildLookup(
+        tiposHabitacionLookupQuery.data?.data ?? [],
+        relationLookups.IdTipoHabitacion.idField,
+        relationLookups.IdTipoHabitacion.labelKeys,
+      ),
+      IdHabitacion: buildLookup(habitacionesLookupQuery.data?.data ?? [], relationLookups.IdHabitacion.idField, relationLookups.IdHabitacion.labelKeys),
+      IdFactura: buildLookup(facturasLookupQuery.data?.data ?? [], relationLookups.IdFactura.idField, relationLookups.IdFactura.labelKeys),
+      IdReserva: buildLookup(reservasLookupQuery.data?.data ?? [], relationLookups.IdReserva.idField, relationLookups.IdReserva.labelKeys),
+      IdCatalogo: buildLookup(catalogoLookupQuery.data?.data ?? [], relationLookups.IdCatalogo.idField, relationLookups.IdCatalogo.labelKeys),
+      IdUsuario: buildLookup(usuariosLookupQuery.data?.data ?? [], relationLookups.IdUsuario.idField, relationLookups.IdUsuario.labelKeys),
+      IdRol: buildLookup(rolesLookupQuery.data?.data ?? [], relationLookups.IdRol.idField, relationLookups.IdRol.labelKeys),
+    }),
+    [
+      catalogoLookupQuery.data?.data,
+      clientesLookupQuery.data?.data,
+      facturasLookupQuery.data?.data,
+      habitacionesLookupQuery.data?.data,
+      reservasLookupQuery.data?.data,
+      rolesLookupQuery.data?.data,
+      sucursalesLookupQuery.data?.data,
+      tiposHabitacionLookupQuery.data?.data,
+      usuariosLookupQuery.data?.data,
+    ],
+  );
+
   const createMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) => createRecord(config!.path, payload),
     onSuccess: () => {
@@ -1995,12 +2156,37 @@ export function ResourcePage() {
   }
 
   const list = query.data?.data ?? [];
+  const getColumnDisplayText = (record: GenericRecord, columnKey: string) => {
+    const rawValue = record[columnKey];
+    if (rawValue === null || rawValue === undefined || String(rawValue).trim() === '') {
+      return '-';
+    }
+
+    if (columnKey !== String(config.idField) && isRelationKey(columnKey)) {
+      return relationMaps[columnKey].get(String(rawValue)) ?? `#${String(rawValue)}`;
+    }
+
+    return String(rawValue);
+  };
+
+  const renderCellValue = (record: GenericRecord, columnKey: string) => {
+    const rawValue = record[columnKey];
+    const text = getColumnDisplayText(record, columnKey);
+
+    if (columnKey !== String(config.idField) && isRelationKey(columnKey) && text !== '-' && rawValue !== null && rawValue !== undefined) {
+      return <span title={`ID ${String(rawValue)}`}>{text}</span>;
+    }
+
+    return text;
+  };
+
   const filteredRecords = list.filter((record) =>
     search.trim() === ''
       ? true
       : config.columns.some((column) => {
-          const value = record[String(column.key)];
-          return String(value ?? '').toLowerCase().includes(search.toLowerCase());
+          const key = String(column.key);
+          const value = getColumnDisplayText(record, key);
+          return value.toLowerCase().includes(search.toLowerCase());
         }),
   );
 
@@ -2156,7 +2342,7 @@ export function ResourcePage() {
                         <tr key={String(record[String(config.idField)])}>
                           {config.columns.map((column) => (
                             <td key={`${String(record[String(config.idField)])}-${String(column.key)}`}>
-                              {column.render ? column.render(record) : String(record[String(column.key)] ?? '-')}
+                              {column.render ? column.render(record) : renderCellValue(record, String(column.key))}
                             </td>
                           ))}
                           <td>
