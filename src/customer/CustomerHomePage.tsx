@@ -184,6 +184,7 @@ function ServiceCard({ service }: { service: PublicService }) {
 function reservationStateLabel(state: string) {
   const normalized = state.toUpperCase();
   if (normalized === 'CON') return 'Confirmada';
+  if (normalized === 'EMI') return 'En estadia';
   if (normalized === 'PEN') return 'Pendiente';
   if (normalized === 'CAN') return 'Cancelada';
   if (normalized === 'FIN') return 'Finalizada';
@@ -201,7 +202,7 @@ function formatShortDate(value: string) {
 function CustomerReservationCard({ reservation, onReview }: { reservation: PublicReservation; onReview: (reservation: PublicReservation) => void }) {
   const isConfirmed = reservation.EstadoReserva?.toUpperCase() === 'CON';
   const roomCount = reservation.Habitaciones?.length ?? 0;
-  const canReview = ['CON', 'FIN'].includes(reservation.EstadoReserva?.toUpperCase());
+  const canReview = ['CON', 'EMI', 'FIN'].includes(reservation.EstadoReserva?.toUpperCase());
 
   return (
     <article className="customer-reservation-card">
@@ -766,7 +767,7 @@ export function CustomerHomePage() {
   const rooms = hasSearched ? availabilityRoomsQuery.data ?? [] : showcaseRooms;
   const services = servicesQuery.data ?? [];
   const customerReservations = customerReservationsQuery.data ?? [];
-  const confirmedReservations = customerReservations.filter((reservation) => reservation.EstadoReserva?.toUpperCase() === 'CON');
+  const confirmedReservations = customerReservations.filter((reservation) => ['CON', 'EMI', 'FIN'].includes(reservation.EstadoReserva?.toUpperCase()));
   const activeRoomsQuery = hasSearched ? availabilityRoomsQuery : showcaseRoomsQuery;
   const featuredRoom = showcaseRooms.find((room) => room.Imagenes?.[0]) ?? showcaseRooms[0] ?? null;
   const displayedBranch = selectedBranch ?? branches.find((branch) => branch.SucursalGuid === featuredRoom?.SucursalGuid) ?? branches[0] ?? null;
