@@ -3,15 +3,15 @@ import type { ApiEnvelope, ApiErrorPayload, AuthUser, LoginPayload, PagedRespons
 
 const normalizeBaseUrl = (value?: string) => value?.trim().replace(/\/+$/, '');
 
+// 🔥 SOLO usa la variable de entorno (SIN localhost)
 const configuredApiUrl = normalizeBaseUrl(import.meta.env.VITE_API_URL);
+
+// ❌ Eliminamos localhost completamente
 const fallbackApiUrls = [
   configuredApiUrl,
-  'https://localhost:7019',
-  'http://localhost:5133',
-  'https://localhost:44358',
-].filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
+].filter((value): value is string => Boolean(value));
 
-let activeApiUrl = fallbackApiUrls[0] ?? 'https://localhost:7019';
+let activeApiUrl = fallbackApiUrls[0]!;
 
 export class ApiError extends Error {
   details: string[];
@@ -34,10 +34,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function toPascalCaseKey(key: string) {
-  if (!key) {
-    return key;
-  }
-
+  if (!key) return key;
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
@@ -67,9 +64,7 @@ export function setAuthToken(token: string | null) {
 function parseError(error: unknown): ApiError {
   if (axios.isAxiosError<ApiErrorPayload>(error)) {
     if (!error.response) {
-      return new ApiError(
-        `No fue posible conectarse con la API. Verifica que el backend este ejecutandose en alguno de estos puertos: ${fallbackApiUrls.join(', ')}`,
-      );
+      return new ApiError('No fue posible conectarse con la API.');
     }
 
     const payload = error.response?.data;
@@ -78,13 +73,8 @@ function parseError(error: unknown): ApiError {
     return new ApiError(message, details);
   }
 
-  if (error instanceof ApiError) {
-    return error;
-  }
-
-  if (error instanceof Error) {
-    return new ApiError(error.message);
-  }
+  if (error instanceof ApiError) return error;
+  if (error instanceof Error) return new ApiError(error.message);
 
   return new ApiError('No fue posible completar la solicitud.');
 }
@@ -94,7 +84,8 @@ function isNetworkError(error: unknown) {
 }
 
 async function executeWithFallback<T>(operation: (baseUrl: string) => Promise<T>) {
-  const baseUrls = [activeApiUrl, ...fallbackApiUrls.filter((url) => url !== activeApiUrl)];
+  const baseUrls = [activeApiUrl];
+
   let lastError: unknown;
 
   for (const baseUrl of baseUrls) {
@@ -126,6 +117,7 @@ export async function login(payload: LoginPayload): Promise<AuthUser> {
     const response = await executeWithFallback((baseUrl) =>
       http.post<ApiEnvelope<Record<string, unknown>>>('/api/v1/internal/auth/login', payload, { baseURL: baseUrl }),
     );
+
     const raw = response.data.data;
 
     return {
@@ -136,7 +128,9 @@ export async function login(payload: LoginPayload): Promise<AuthUser> {
       accessToken: String(raw.access_token ?? ''),
       refreshToken: String(raw.refresh_token ?? ''),
       expiresIn: Number(raw.expires_in ?? 0),
-      roles: Array.isArray(raw.roles) ? raw.roles.map((value) => String(value).toLowerCase()) as AuthUser['roles'] : [],
+      roles: Array.isArray(raw.roles)
+        ? raw.roles.map((value) => String(value).toLowerCase()) as AuthUser['roles']
+        : [],
     };
   } catch (error) {
     throw parseError(error);
@@ -151,6 +145,7 @@ export async function fetchPaged<TRecord>(path: string, page: number, limit: num
         params: { pagina: page, limite: limit },
       }),
     );
+
     return {
       ...response.data,
       data: normalizeApiShape(response.data.data),
@@ -162,7 +157,9 @@ export async function fetchPaged<TRecord>(path: string, page: number, limit: num
 
 export async function createRecord<TRecord>(path: string, payload: Record<string, unknown>) {
   try {
-    const response = await executeWithFallback((baseUrl) => http.post<ApiEnvelope<TRecord>>(path, payload, { baseURL: baseUrl }));
+    const response = await executeWithFallback((baseUrl) =>
+      http.post<ApiEnvelope<TRecord>>(path, payload, { baseURL: baseUrl }),
+    );
     return normalizeApiShape(response.data.data);
   } catch (error) {
     throw parseError(error);
@@ -171,7 +168,9 @@ export async function createRecord<TRecord>(path: string, payload: Record<string
 
 export async function updateRecord<TRecord>(path: string, id: string | number, payload: Record<string, unknown>) {
   try {
-    const response = await executeWithFallback((baseUrl) => http.put<ApiEnvelope<TRecord>>(`${path}/${id}`, payload, { baseURL: baseUrl }));
+    const response = await executeWithFallback((baseUrl) =>
+      http.put<ApiEnvelope<TRecord>>(`${path}/${id}`, payload, { baseURL: baseUrl }),
+    );
     return normalizeApiShape(response.data.data);
   } catch (error) {
     throw parseError(error);
@@ -180,7 +179,9 @@ export async function updateRecord<TRecord>(path: string, id: string | number, p
 
 export async function deleteRecord(path: string, id: string | number) {
   try {
-    await executeWithFallback((baseUrl) => http.delete(`${path}/${id}`, { baseURL: baseUrl }));
+    await executeWithFallback((baseUrl) =>
+      http.delete(`${path}/${id}`, { baseURL: baseUrl }),
+    );
   } catch (error) {
     throw parseError(error);
   }
@@ -193,21 +194,29 @@ export async function runAction<TResponse = unknown>(
 ) {
   try {
     if (method === 'get') {
-      const response = await executeWithFallback((baseUrl) => http.get<TResponse>(path, { baseURL: baseUrl }));
+      const response = await executeWithFallback((baseUrl) =>
+        http.get<TResponse>(path, { baseURL: baseUrl }),
+      );
       return normalizeApiShape(response.data);
     }
 
     if (method === 'delete') {
-      const response = await executeWithFallback((baseUrl) => http.delete<TResponse>(path, { baseURL: baseUrl, data: payload }));
+      const response = await executeWithFallback((baseUrl) =>
+        http.delete<TResponse>(path, { baseURL: baseUrl, data: payload }),
+      );
       return normalizeApiShape(response.data);
     }
 
     if (method === 'patch') {
-      const response = await executeWithFallback((baseUrl) => http.patch<TResponse>(path, payload, { baseURL: baseUrl }));
+      const response = await executeWithFallback((baseUrl) =>
+        http.patch<TResponse>(path, payload, { baseURL: baseUrl }),
+      );
       return normalizeApiShape(response.data);
     }
 
-    const response = await executeWithFallback((baseUrl) => http.post<TResponse>(path, payload, { baseURL: baseUrl }));
+    const response = await executeWithFallback((baseUrl) =>
+      http.post<TResponse>(path, payload, { baseURL: baseUrl }),
+    );
     return normalizeApiShape(response.data);
   } catch (error) {
     throw parseError(error);
