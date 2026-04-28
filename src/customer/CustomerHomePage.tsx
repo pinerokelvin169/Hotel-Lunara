@@ -87,12 +87,12 @@ const publicRegisterFields: FieldConfig[] = [
   { name: 'Password', label: 'Contrasena', type: 'password', required: true, maxLength: 128 },
 ];
 
-function readBackendError(error: unknown) {
+function readBackendError(error: unknown, unavailable?: { message: string; details?: string[] }) {
   const response = (error as { response?: { status?: number; data?: { message?: string; title?: string; error?: string; details?: string[]; errors?: string[] } } })?.response;
   if (response?.status === 404 || response?.status === 405) {
     return {
-      message: 'El registro de clientes no esta disponible en la API activa.',
-      details: ['Reinicia la API para cargar los endpoints nuevos de /api/v1/auth/registro-cliente.'],
+      message: unavailable?.message ?? 'El endpoint solicitado no esta disponible en la API activa.',
+      details: unavailable?.details ?? ['Verifica que la API desplegada tenga publicado este endpoint.'],
     };
   }
 
@@ -268,7 +268,10 @@ function ReviewForm({
         return;
       }
 
-      const backend = readBackendError(requestError);
+      const backend = readBackendError(requestError, {
+        message: 'El registro de valoraciones no esta disponible en la API activa.',
+        details: ['Actualiza la API para publicar /api/v1/public/valoraciones.'],
+      });
       setError(backend.message ?? (requestError instanceof Error ? requestError.message : 'No pudimos registrar la valoracion.'));
     },
     onSuccess: () => {
@@ -397,7 +400,10 @@ function CustomerAuthForm({
         return;
       }
 
-      const backend = readBackendError(requestError);
+      const backend = readBackendError(requestError, {
+        message: 'El inicio de sesion no esta disponible en la API activa.',
+        details: ['Verifica que la API tenga publicado /api/v1/auth/login.'],
+      });
       setError(backend.message ?? (requestError instanceof Error ? requestError.message : 'No pudimos iniciar sesion.'));
       setErrorDetails(backend.details);
     },
@@ -418,7 +424,10 @@ function CustomerAuthForm({
         return;
       }
 
-      const backend = readBackendError(requestError);
+      const backend = readBackendError(requestError, {
+        message: 'El registro de clientes no esta disponible en la API activa.',
+        details: ['Reinicia la API para cargar los endpoints nuevos de /api/v1/auth/registro-cliente.'],
+      });
       setError(backend.message ?? (requestError instanceof Error ? requestError.message : 'No pudimos crear la cuenta.'));
       setErrorDetails(backend.details);
     },
