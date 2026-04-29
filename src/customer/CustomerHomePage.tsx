@@ -48,10 +48,21 @@ import {
 } from './publicApi';
 import type { PublicBranch, PublicCustomerAuth, PublicReservation, PublicReservationPayload, PublicReview, PublicReviewPayload, PublicRoom, PublicService } from './types';
 
+function formatDateInput(date: Date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+}
+
 function today(offset = 0) {
   const date = new Date();
   date.setDate(date.getDate() + offset);
-  return date.toISOString().slice(0, 10);
+  return formatDateInput(date);
+}
+
+function tomorrowFrom(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  date.setDate(date.getDate() + 1);
+  return formatDateInput(date);
 }
 
 function money(value: number, currency = 'USD') {
@@ -61,6 +72,24 @@ function money(value: number, currency = 'USD') {
 function nights(start: string, end: string) {
   const diff = new Date(end).getTime() - new Date(start).getTime();
   return Math.max(1, Math.ceil(diff / 86_400_000));
+}
+
+function validateStayDates(start: string, end: string) {
+  const minimumStart = today();
+
+  if (!start || !end) {
+    return 'Selecciona fecha de llegada y salida.';
+  }
+
+  if (start < minimumStart) {
+    return 'La fecha de llegada no puede ser anterior a hoy.';
+  }
+
+  if (end <= start) {
+    return 'La fecha de salida debe ser posterior a la llegada.';
+  }
+
+  return null;
 }
 
 function branchLabel(branch: PublicBranch) {
@@ -619,6 +648,12 @@ function BookingForm({
       setError(null);
       setErrorDetails([]);
       setFieldErrors({});
+
+      const dateError = validateStayDates(dates.start, dates.end);
+      if (dateError) {
+        throw new ClientValidationError([dateError]);
+      }
+
       validateClientForm('reserva-publica', publicBookingFields, form);
       const payload: PublicReservationPayload = {
         SucursalGuid: room.SucursalGuid,
@@ -752,6 +787,9 @@ export function CustomerHomePage() {
   const [customerNavOpen, setCustomerNavOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedReviewReservation, setSelectedReviewReservation] = useState<PublicReservation | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const minimumStartDate = today();
+  const minimumEndDate = draft.start >= minimumStartDate ? tomorrowFrom(draft.start) : tomorrowFrom(minimumStartDate);
 
   const selectedBranch = useMemo(
     () => branches.find((branch) => branch.SucursalGuid === selectedBranchGuid) ?? null,
@@ -813,6 +851,13 @@ export function CustomerHomePage() {
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
+    const dateError = validateStayDates(draft.start, draft.end);
+    if (dateError) {
+      setSearchError(dateError);
+      return;
+    }
+
+    setSearchError(null);
     setSearch({
       start: draft.start,
       end: draft.end,
@@ -826,6 +871,19 @@ export function CustomerHomePage() {
   const clearBranch = () => {
     setSelectedBranchGuid('');
     setSearch((current) => ({ ...current, branchGuid: '' }));
+  };
+
+  const updateDraftStart = (start: string) => {
+    setSearchError(null);
+    setDraft((current) => {
+      const nextEnd = start && current.end <= start ? tomorrowFrom(start) : current.end;
+      return { ...current, start, end: nextEnd };
+    });
+  };
+
+  const updateDraftEnd = (end: string) => {
+    setSearchError(null);
+    setDraft((current) => ({ ...current, end }));
   };
 
   const focusSearch = () => {
@@ -944,11 +1002,11 @@ export function CustomerHomePage() {
             </label>
             <label>
               <span>Llegada</span>
-              <input type="date" value={draft.start} onChange={(event) => setDraft((current) => ({ ...current, start: event.target.value }))} />
+              <input type="date" min={minimumStartDate} value={draft.start} onChange={(event) => updateDraftStart(event.target.value)} />
             </label>
             <label>
               <span>Salida</span>
-              <input type="date" value={draft.end} onChange={(event) => setDraft((current) => ({ ...current, end: event.target.value }))} />
+              <input type="date" min={minimumEndDate} value={draft.end} onChange={(event) => updateDraftEnd(event.target.value)} />
             </label>
             <div className="guest-stepper">
               <span>Adultos</span>
@@ -966,6 +1024,11 @@ export function CustomerHomePage() {
               <Search size={18} />
               <span>{availabilityRoomsQuery.isFetching ? 'Buscando...' : 'Buscar disponibilidad'}</span>
             </button>
+            {searchError ? (
+              <div className="span-all">
+                <StatusMessage kind="error" title={searchError} />
+              </div>
+            ) : null}
           </form>
         </section>
 
