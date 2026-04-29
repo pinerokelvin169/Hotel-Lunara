@@ -1001,17 +1001,43 @@ export const resourceConfigs: ResourceConfig<GenericRecord>[] = [
       RespuestaHotel: '',
     },
     actions: [
-      statusAction(
-        'moderar-valoracion',
-        'Moderar',
-        ['admin', 'vendedor'],
-        (row) => `/api/v1/internal/valoraciones/${row.IdValoracion}/moderar`,
-        [
-          { label: 'Publicar', value: 'PUB' },
-          { label: 'Ocultar', value: 'OCU' },
-          { label: 'Respondida', value: 'REP' },
+      {
+        key: 'moderar-valoracion',
+        label: 'Moderar',
+        roles: ['admin', 'vendedor'],
+        method: 'patch',
+        endpoint: (row) => `/api/v1/internal/valoraciones/${row.IdValoracion}/moderar`,
+        fields: [
+          {
+            name: 'Estado',
+            label: 'Nuevo estado',
+            type: 'select',
+            required: true,
+            options: [
+              { label: 'Publicar', value: 'PUB' },
+              { label: 'Ocultar', value: 'OCU' },
+              { label: 'Respondida', value: 'REP' },
+            ],
+          },
+          {
+            name: 'PublicadaEnPortal',
+            label: 'Mostrar en pagina publica',
+            type: 'select',
+            required: true,
+            options: [
+              { label: 'Si, mostrarla en el home', value: 'true' },
+              { label: 'No, mantenerla privada', value: 'false' },
+            ],
+          },
         ],
-      ),
+        buildPayload: (values, _record, username) => ({
+          Estado: values.Estado,
+          PublicadaEnPortal: String(values.PublicadaEnPortal) === 'true',
+          Usuario: username,
+        }),
+        successMessage: 'Valoracion moderada correctamente.',
+        variant: 'accent',
+      },
       {
         key: 'responder-valoracion',
         label: 'Responder',
