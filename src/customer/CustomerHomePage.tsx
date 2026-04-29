@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BedDouble,
   CalendarDays,
-  ClipboardCheck,
   Clock,
   CreditCard,
   Hotel,
@@ -1118,49 +1117,37 @@ export function CustomerHomePage() {
           ) : null}
         </section>
 
-        <section id="mis-reservas" className="customer-section customer-account-section">
-          <div className="customer-section-header">
-            <div>
-              <span className="eyebrow">Area de cliente</span>
-              <h2>Tus reservas confirmadas.</h2>
-            </div>
-            {customerAuth ? <p>{customerReservationsQuery.isFetching ? 'Actualizando reservas...' : `${confirmedReservations.length} confirmada(s)`}</p> : null}
-          </div>
-
-          {!customerAuth ? (
-            <div className="customer-account-guest">
+        {customerAuth ? (
+          <section id="mis-reservas" className="customer-section customer-account-section">
+            <div className="customer-section-header">
               <div>
-                <ClipboardCheck size={30} />
-                <strong>Ingresa para ver tus reservas</strong>
-                <p>Al iniciar sesion podras consultar tus reservas confirmadas y dejar una valoracion despues de tu estadia.</p>
+                <span className="eyebrow">Area de cliente</span>
+                <h2>Tus reservas confirmadas.</h2>
               </div>
-              <button type="button" className="customer-primary-button icon-text" onClick={() => openCustomerAuth('login')}>
-                <LogIn size={18} />
-                <span>Entrar a mi cuenta</span>
-              </button>
+              <p>{customerReservationsQuery.isFetching ? 'Actualizando reservas...' : `${confirmedReservations.length} confirmada(s)`}</p>
             </div>
-          ) : null}
 
-          {customerAuth && customerReservationsQuery.isError ? (
-            <StatusMessage
-              kind="error"
-              title="No pudimos cargar tus reservas."
-              details={['Verifica que la API tenga disponible el endpoint publico de reservas del cliente.']}
-            />
-          ) : null}
+            {customerReservationsQuery.isError ? (
+              <StatusMessage
+                kind="error"
+                title="No pudimos cargar tus reservas."
+                details={['Inicia sesion nuevamente o verifica que la API tenga disponible el endpoint publico de reservas del cliente.']}
+              />
+            ) : null}
 
-          {customerAuth && !customerReservationsQuery.isFetching && confirmedReservations.length === 0 && !customerReservationsQuery.isError ? (
-            <div className="empty-state">Aun no tienes reservas confirmadas en esta cuenta.</div>
-          ) : null}
+            {!customerReservationsQuery.isFetching && confirmedReservations.length === 0 && !customerReservationsQuery.isError ? (
+              <div className="empty-state">Aun no tienes reservas confirmadas en esta cuenta.</div>
+            ) : null}
 
-          {customerAuth && confirmedReservations.length > 0 ? (
-            <div className="customer-reservation-grid">
-              {confirmedReservations.map((reservation) => (
-                <CustomerReservationCard key={reservation.ReservaGuid} reservation={reservation} onReview={setSelectedReviewReservation} />
-              ))}
-            </div>
-          ) : null}
-        </section>
+            {confirmedReservations.length > 0 ? (
+              <div className="customer-reservation-grid">
+                {confirmedReservations.map((reservation) => (
+                  <CustomerReservationCard key={reservation.ReservaGuid} reservation={reservation} onReview={setSelectedReviewReservation} />
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <section className="experience-section">
           <div>
