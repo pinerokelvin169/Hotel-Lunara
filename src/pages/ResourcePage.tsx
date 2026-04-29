@@ -2333,7 +2333,13 @@ export function ResourcePage() {
                   ) : (
                     filteredRecords.map((record) => {
                       const rowClosed = isClosedForRowActions(config.key, record);
-                      const rowActions = config.actions?.filter((action) => action.roles.some((role) => hasRole(role)) && isActionAvailableForRecord(config.key, action, record)) ?? [];
+                      const rowActions =
+                        config.actions?.filter(
+                          (action) =>
+                            action.roles.some((role) => hasRole(role)) &&
+                            (action.variant !== 'danger' || hasRole('admin')) &&
+                            isActionAvailableForRecord(config.key, action, record),
+                        ) ?? [];
                       const canEditRow = visibleUpdate && !rowClosed;
                       const canDeleteRow = visibleDelete && !rowClosed;
                       const hasRowActions = canEditRow || canDeleteRow || rowActions.length > 0;

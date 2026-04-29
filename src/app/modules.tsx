@@ -635,7 +635,7 @@ export const resourceConfigs: ResourceConfig<GenericRecord>[] = [
       {
         key: 'desactivar',
         label: 'Desactivar',
-        roles: ['admin', 'vendedor'],
+        roles: ['admin'],
         method: 'patch',
         endpoint: (row) => `/api/v1/internal/tarifas/${row.IdTarifa}/desactivar`,
         fields: reasonFields,
@@ -781,7 +781,7 @@ export const resourceConfigs: ResourceConfig<GenericRecord>[] = [
       {
         key: 'cancelar',
         label: 'Cancelar',
-        roles: ['admin', 'vendedor'],
+        roles: ['admin'],
         method: 'patch',
         endpoint: (row) => `/api/v1/internal/reservas/${row.IdReserva}/cancelar`,
         fields: reasonFields,
@@ -925,7 +925,7 @@ export const resourceConfigs: ResourceConfig<GenericRecord>[] = [
       {
         key: 'anular-factura',
         label: 'Anular',
-        roles: ['admin', 'vendedor'],
+        roles: ['admin'],
         method: 'patch',
         endpoint: (row) => `/api/v1/internal/facturas/${row.IdFactura}/anular`,
         fields: reasonFields,
@@ -1166,7 +1166,7 @@ export const operationsConfig: OperationConfig[] = [
     title: 'Anular cargo',
     description: 'Revierte un cargo especifico de una estadia.',
     method: 'patch',
-    roles: ['admin', 'vendedor'],
+    roles: ['admin'],
     fields: [
       { name: 'EstadiaId', label: 'Estadia', type: 'number', min: 1 },
       { name: 'CargoId', label: 'Cargo', type: 'number', required: true, min: 1 },
