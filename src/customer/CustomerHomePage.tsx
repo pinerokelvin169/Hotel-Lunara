@@ -38,6 +38,7 @@ import {
   createPublicReservation,
   getPublicBranches,
   getPublicCustomerReservations,
+  getPublicReviews,
   getPublicServices,
   getStoredPublicCustomerAuth,
   loginPublicCustomer,
@@ -45,7 +46,7 @@ import {
   searchPublicRooms,
   submitPublicReview,
 } from './publicApi';
-import type { PublicBranch, PublicCustomerAuth, PublicReservation, PublicReservationPayload, PublicReviewPayload, PublicRoom, PublicService } from './types';
+import type { PublicBranch, PublicCustomerAuth, PublicReservation, PublicReservationPayload, PublicReview, PublicReviewPayload, PublicRoom, PublicService } from './types';
 
 function today(offset = 0) {
   const date = new Date();
@@ -177,6 +178,29 @@ function ServiceCard({ service }: { service: PublicService }) {
         {service.Descripcion ? <p>{service.Descripcion}</p> : null}
         <small>{[schedule, service.PrecioBase > 0 ? money(service.PrecioBase) : ''].filter(Boolean).join(' - ')}</small>
       </div>
+    </article>
+  );
+}
+
+function PublicReviewCard({ review }: { review: PublicReview }) {
+  return (
+    <article className="public-review-card">
+      <div className="public-review-score">
+        <Star size={18} />
+        <strong>{Number(review.PuntuacionGeneral).toFixed(1)}</strong>
+      </div>
+      <div>
+        <h3>{review.NombreHuesped || 'Huesped verificado'}</h3>
+        <p>{[review.NombreSucursal, review.TipoViaje].filter(Boolean).join(' - ')}</p>
+      </div>
+      {review.ComentarioPositivo ? <blockquote>{review.ComentarioPositivo}</blockquote> : null}
+      {review.ComentarioNegativo ? <p className="public-review-muted">{review.ComentarioNegativo}</p> : null}
+      {review.RespuestaHotel ? (
+        <div className="hotel-reply">
+          <strong>Respuesta del hotel</strong>
+          <p>{review.RespuestaHotel}</p>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -739,6 +763,11 @@ export function CustomerHomePage() {
     queryFn: () => getPublicServices(search.branchGuid || undefined),
   });
 
+  const publicReviewsQuery = useQuery({
+    queryKey: ['public-reviews', selectedBranchGuid],
+    queryFn: () => getPublicReviews(selectedBranchGuid || undefined),
+  });
+
   const showcaseRoomsQuery = useQuery({
     queryKey: ['public-room-showcase'],
     queryFn: () => searchPublicRooms({ soloCatalogo: true }),
@@ -766,9 +795,17 @@ export function CustomerHomePage() {
   const showcaseRooms = showcaseRoomsQuery.data ?? [];
   const rooms = hasSearched ? availabilityRoomsQuery.data ?? [] : showcaseRooms;
   const services = servicesQuery.data ?? [];
+  const publicReviews = publicReviewsQuery.data ?? [];
   const customerReservations = customerReservationsQuery.data ?? [];
   const confirmedReservations = customerReservations.filter((reservation) => ['CON', 'EMI', 'FIN'].includes(reservation.EstadoReserva?.toUpperCase()));
   const activeRoomsQuery = hasSearched ? availabilityRoomsQuery : showcaseRoomsQuery;
+  const roomsForCounters = [...showcaseRooms, ...rooms];
+  const branchCount = branches.length || new Set(roomsForCounters.map((room) => room.SucursalGuid).filter(Boolean)).size;
+  const roomCount = Math.max(showcaseRooms.length, rooms.length);
+  const serviceCount = services.length || new Map(roomsForCounters.flatMap((room) => room.Servicios ?? []).map((service) => [service.CatalogoGuid || service.Codigo, service])).size;
+  const branchCountLabel = branchesQuery.isLoading && branchCount === 0 ? '...' : String(branchCount);
+  const roomCountLabel = showcaseRoomsQuery.isLoading && roomCount === 0 ? '...' : String(roomCount);
+  const serviceCountLabel = servicesQuery.isLoading && serviceCount === 0 ? '...' : String(serviceCount);
   const featuredRoom = showcaseRooms.find((room) => room.Imagenes?.[0]) ?? showcaseRooms[0] ?? null;
   const displayedBranch = selectedBranch ?? branches.find((branch) => branch.SucursalGuid === featuredRoom?.SucursalGuid) ?? branches[0] ?? null;
   const heroDescription = selectedBranch?.DescripcionCorta || selectedBranch?.DescripcionSucursal || featuredRoom?.DescripcionCortaSucursal || featuredRoom?.DescripcionSucursal;
@@ -848,6 +885,7 @@ export function CustomerHomePage() {
           <a href="#sucursales" onClick={() => setCustomerNavOpen(false)}>Sucursales</a>
           <a href="#habitaciones" onClick={() => setCustomerNavOpen(false)}>Habitaciones</a>
           <a href="#servicios" onClick={() => setCustomerNavOpen(false)}>Servicios</a>
+          <a href="#valoraciones" onClick={() => setCustomerNavOpen(false)}>Valoraciones</a>
           {customerAuth ? <a href="#mis-reservas" onClick={() => setCustomerNavOpen(false)}>Mis reservas</a> : null}
           <a href="#contacto" onClick={() => setCustomerNavOpen(false)}>Contacto</a>
           {customerAuth ? (
@@ -885,8 +923,8 @@ export function CustomerHomePage() {
             {heroDescription ? <p>{heroDescription}</p> : null}
             <div className="hero-highlights">
               <span><CreditCard size={16} /> Reserva directa</span>
-              <span><BedDouble size={16} /> {showcaseRooms.length} habitaciones</span>
-              <span><Sparkles size={16} /> {services.length} servicios</span>
+              <span><BedDouble size={16} /> {roomCountLabel} habitaciones</span>
+              <span><Sparkles size={16} /> {serviceCountLabel} servicios</span>
             </div>
           </div>
 
@@ -932,9 +970,9 @@ export function CustomerHomePage() {
         </section>
 
         <section className="customer-feature-strip">
-          <div><MapPin size={22} /><span>{branches.length} sucursales activas</span></div>
-          <div><BedDouble size={22} /><span>{showcaseRooms.length} habitaciones y suites</span></div>
-          <div><Wifi size={22} /><span>{services.length} servicios para tu estadia</span></div>
+          <div><MapPin size={22} /><span>{branchCountLabel} sucursales activas</span></div>
+          <div><BedDouble size={22} /><span>{roomCountLabel} habitaciones y suites</span></div>
+          <div><Wifi size={22} /><span>{serviceCountLabel} servicios para tu estadia</span></div>
           <div><ShieldCheck size={22} /><span>Reservas con confirmacion y pago en linea</span></div>
         </section>
 
@@ -991,6 +1029,30 @@ export function CustomerHomePage() {
           <div className="service-grid">
             {services.map((service) => <ServiceCard key={service.CatalogoGuid || service.Codigo} service={service} />)}
           </div>
+        </section>
+
+        <section id="valoraciones" className="customer-section public-reviews-section">
+          <div className="customer-section-header">
+            <div>
+              <span className="eyebrow">Valoraciones</span>
+              <h2>Experiencias compartidas por nuestros huespedes.</h2>
+            </div>
+            <p>{publicReviewsQuery.isLoading ? 'Cargando valoraciones...' : `${publicReviews.length} publicadas`}</p>
+          </div>
+
+          {publicReviewsQuery.isError ? (
+            <StatusMessage kind="error" title="No pudimos cargar las valoraciones publicadas." />
+          ) : null}
+
+          {!publicReviewsQuery.isLoading && !publicReviewsQuery.isError && publicReviews.length === 0 ? (
+            <div className="empty-state">Aun no hay valoraciones publicadas para mostrar.</div>
+          ) : null}
+
+          {publicReviews.length > 0 ? (
+            <div className="public-review-grid">
+              {publicReviews.map((review) => <PublicReviewCard key={review.ValoracionGuid} review={review} />)}
+            </div>
+          ) : null}
         </section>
 
         <section id="mis-reservas" className="customer-section customer-account-section">

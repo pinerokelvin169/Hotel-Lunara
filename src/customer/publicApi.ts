@@ -7,6 +7,7 @@ import type {
   PublicPayment,
   PublicPaymentSimulationResult,
   PublicPaymentSimulationPayload,
+  PublicReview,
   PublicReviewPayload,
   PublicReservation,
   PublicReservationPayload,
@@ -280,6 +281,14 @@ export async function submitPublicReview(payload: PublicReviewPayload) {
     { headers: customerAuthHeaders() },
   );
   return normalizeObject(response.data.data);
+}
+
+export async function getPublicReviews(sucursalGuid?: string) {
+  const response = await executePublicEndpoint<{ data: PublicReview[] }>(
+    ['/api/v1/public/valoraciones'],
+    { params: sucursalGuid ? { sucursalGuid } : undefined },
+  );
+  return normalizeObject(response.data.data) as PublicReview[];
 }
 
 export async function simulatePublicPayment(payload: PublicPaymentSimulationPayload) {

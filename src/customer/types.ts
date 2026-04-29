@@ -176,6 +176,23 @@ export interface PublicReviewPayload {
   ComentarioNegativo?: string;
 }
 
+export interface PublicReview {
+  ValoracionGuid: string;
+  SucursalGuid: string;
+  NombreSucursal: string;
+  NombreHuesped: string;
+  TipoViaje?: string;
+  PuntuacionGeneral: number;
+  PuntuacionLimpieza?: number;
+  PuntuacionConfort?: number;
+  PuntuacionUbicacion?: number;
+  ComentarioPositivo?: string;
+  ComentarioNegativo?: string;
+  RespuestaHotel?: string;
+  FechaRespuestaUtc?: string;
+  FechaPublicacion: string;
+}
+
 export interface PublicPaymentSimulationPayload {
   FacturaGuid: string;
   MetodoPago: 'TARJETA';
